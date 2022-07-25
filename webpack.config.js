@@ -7,9 +7,8 @@ const globule = require("globule");
 
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const CopyPlugin = require("copy-webpack-plugin");
-
-const StyleLintPlugin = require("stylelint-webpack-plugin");
+const ESLintPlugin = require("stylelint-webpack-plugin");
+// const CopyPlugin = require("copy-webpack-plugin");
 
 // --------------------------------------------
 // Settings
@@ -18,20 +17,31 @@ const MODE = process.env.NODE_MODE || "development"; //development:開発, produ
 const TYPE = process.env.NODE_TYPE || "normal";
 
 const DIR = {
-  src: "src",
-  dist: "public",
+  src: Path.join(__dirname, "src"),
+  dist: Path.join(__dirname, "public"),
+  shopify: Path.join(__dirname, "shopify"),
   assets: "assets",
-  shopify: "shopify"
 }
 
+const SETTINGS = {
+  pug: true,
+  sass: true,
+  ts: false,
+  php: false,
+};
+
 const EXTENSION_LIST = {
+  html: "html",
+  pug: "html",
   scss: "css",
   js: "js",
+  // ts: "js",
 };
 
 const ENTRY = {
   scss: [],
-  js: {},
+  ts: {},
+  pug: {}
 };
 
 // const OUTPUT_DIR = DIR["shopify"];
@@ -43,75 +53,95 @@ console.log("TYPE", TYPE);
 console.log("OUTPUT_DIR", OUTPUT_DIR);
 
 
+
 // --------------------------------------------
 // SCSS
 // --------------------------------------------
+const scssLoader = [
+  MiniCssExtractPlugin.loader,
+  {
+    loader: "css-loader",
+    options: {
+      url: false,
+      sourceMap : MODE == "production" ? false: true,
+    }
+  },
+  {
+    loader: "postcss-loader",
+    options: {
+      sourceMap: MODE === "production" ? false : true,
+    },
+  },
+  {
+    loader: "sass-loader",
+    options: {
+      implementation: require("sass"),
+      sassOptions: {
+        indentWidth: 2,
+        fiber: false,
+        // outputStyle: 'compressed',
+      },
+      sourceMap: MODE === "production" ? false : true,
+    },
+  },
+];
 
-// --------------------------------------------
-// JS
-// --------------------------------------------
-
-// --------------------------------------------
-// Module Exports
-// --------------------------------------------
-const entryPoints = {
-  main: [`./${DIR.src}/js/main.js`, `./${DIR.src}/css/common.css`],
+const scssConfig = ()=>{
+  ENTRY["scss"].map((data)=>{
+    const config = {
+      mode: MODE,
+      entry: data.scss,
+      output: {
+        path: `${OUTPUT_DIR}/${DIR.assets}` ,
+      },
+      module: {
+        rules: [
+          {
+            test: /\.scss$/,
+            exclude: /node_modules/,
+            use: scssLoader,
+          },
+        ],
+      },
+      plugins: [
+        // new FixStyleOnlyEntriesPlugin(),
+        new MiniCssExtractPlugin({
+          filename: data.css,
+        }),
+      ],
+    };
+    module.exports.push(config);
+  });
 };
-entryPoints.main[1] = `./${DIR.src}/scss/common.scss`;
 
 
+// --------------------------------------------
+// pug
+// --------------------------------------------
 
-module.exports = {
-  mode: MODE,
-  entry: {
-    ...entryPoints,
+// pug loader
+const pugLoader = [
+  {
+    loader: "pug-html-loader",
+    options: {
+      pretty: true,
+    },
   },
+];
+// pug config
+const pugConfig = {
+  mode: "development",
+  entry: ENTRY["pug"],
   output: {
-    path: Path.resolve(__dirname, OUTPUT_DIR),
-    filename: `./${DIR.assets}/[name].bundle.js`,
-    // assetModuleFilename: `${DIR.assets}/img/[name][ext]`,
+    filename: "[name]",
+    publicPath: "/",
+    path: OUTPUT_DIR,
   },
-
   module: {
     rules: [
       {
-        test: /\.js$/,
-        exclude: /node_modules/,
-        loader: "babel-loader",
-      },
-      {
-        test: /\.(js|ts|tsx)$/,
-        enforce: "pre",
-        exclude: /node_modules/,
-        loader: "eslint-loader",
-        options: {
-          fix: true, //autofixモードの有効化
-          failOnError: true, //エラー検出時にビルド中断
-        },
-      },
-      {
-        test: /\.(css|s[ac]ss)$/,
-        use: [
-          {
-            loader: MiniCssExtractPlugin.loader,
-          },
-          {
-            loader: "css-loader",
-            options: {
-              url: false,
-              sourceMap: true,
-            },
-          },
-          "postcss-loader",
-        ],
-      },
-      {
-        test: /\.s[ac]ss$/,
-        enforce: "pre",
-        use: ["sass-loader"],
-      },
-      {
         test: /\.(pug|html)$/,
+        enforce: "pre",
         use: [
           {
             loader: "html-loader",
@@ -121,74 +151,132 @@ module.exports = {
           },
         ],
       },
+      {
+        test: /\.pug$/,
+        enforce: "pre",
+        exclude: /node_modules/,
+        use: pugLoader,
+      },
     ],
   },
-
-  plugins: [
-    new MiniCssExtractPlugin({
-      filename: `./${DIR.assets}/common.css`,
-    }),
-    new CopyPlugin({
-      patterns: [
-        {
-          from: `${DIR.src}/${DIR.assets}/img`,
-          to: `${DIR.assets}`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: `${DIR.src}/${DIR.assets}/font`,
-          to: `${DIR.assets}`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: `${DIR.src}/${DIR.assets}/pdf`,
-          to: `${DIR.assets}`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: `${DIR.src}/${DIR.assets}/media`,
-          to: `${DIR.assets}`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: "*.txt",
-          context: `${DIR.src}/`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: "*.json",
-          context: `${DIR.src}/`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: "*.xml",
-          context: `${DIR.src}/`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: "*.png",
-          context: `${DIR.src}/`,
-          noErrorOnMissing: true,
-        },
-        {
-          from: "*.icon",
-          context: `${DIR.src}/`,
-          noErrorOnMissing: true,
-        }
-      ],
-    }),
-
-    // new StyleLintPlugin({
-    //   fix: true, // 自動修正可能なものは修正
-    //   // failOnError: true, //エラー検出時にビルド中断
-    // }),
-  ],
-  resolve: {
-    extensions: [".ts", ".js", ".json"],
-  },
-  // ES5(IE11等)向けの指定
-  target: ["web", "es5"],
+  plugins: [],
+  cache: true,
 };
 
+// --------------------------------------------
+// TS / JS
+// --------------------------------------------
+const tsRules  = [
+  {
+    test: /\.(ts|tsx)$/,
+    exclude: /node_modules/,
+    loader: "ts-loader",
+  },
+  {
+    test: /\.js$/,
+    exclude: /node_modules/,
+    loader: "babel-loader",
+  },
+  {
+    test: /\.(js|ts|tsx)$/,
+    enforce: "pre",
+    exclude: /node_modules/,
+    loader: "eslint-loader",
+    options: {
+      fix: true, //autofixモードの有効化
+      // failOnError: true, //エラー検出時にビルド中断
+    },
+  },
+];
 
-// module.exports = [];
+const tsConfig = {
+  mode: MODE,
+  target: ["web", "es5"],
+  entry: ENTRY["ts"],
+  output: {
+    filename: "[name]",
+    // publicPath: "/",
+    // path: OUTPUT_DIR,
+    path: `${OUTPUT_DIR}/${DIR.assets}` ,
+  },
+  resolve: {
+    extensions: [".js", ".ts", ".jsx", ".tsx"],
+  },
+  module: {
+    rules: tsRules,
+  },
+  plugins: [
+    // new Webpack.optimize.AggressiveMergingPlugin(),
+    new ESLintPlugin({
+      extensions: [".ts"],
+      fix: true,
+    }),
+  ],
+};
+// if (MODE === "development") tsConfig.devtool = "eval-source-map";
+
+
+// --------------------------------------------
+// File List
+// --------------------------------------------
+Object.keys(EXTENSION_LIST).forEach((from)=>{
+  const to = EXTENSION_LIST[from];
+  const filelist = globule.find(
+    [`**/*.${from}`, `!**/_*.${from}`, `!**/_**/**/*.${from}`],
+    { cwd: DIR["src"] }
+  );
+
+  filelist.forEach((filename)=>{
+    let output = filename.replace(new RegExp(`.${from}$`, "i"), `.${to}`);
+    const source = Path.join(DIR["src"], filename);
+
+    // pug - html
+    if (output.indexOf(".html") !== -1) {
+      output =  output.replace("pug/", "");
+      ENTRY["pug"][output] = source;
+      pugConfig.plugins.push(
+        new HtmlWebpackPlugin({
+          filename: output,
+          template: source,
+          minify: false,
+        })
+      );
+    }
+
+    // scss - css
+    if (output.indexOf(".css") !== -1) {
+      if(TYPE === "shopify"){
+        output = output.replace("scss/", "");
+      }else{
+        output = output.replace("scss/", "css/");
+      }
+      ENTRY["scss"].push({
+        scss: source,
+        css: output,
+      });
+    }
+
+    // ts - js
+    if (output.indexOf(".js") !== -1) {
+      if(TYPE === "shopify"){
+        output = output.replace("ts/", "");
+        output = output.replace("js/", "");
+      }else{
+        output = output.replace("ts/", "js/");
+        output = output.replace("js/", "js/");
+      }
+      ENTRY["ts"][output] = source;
+    }
+  });
+
+});
+
+
+// --------------------------------------------
+// Module Exports
+// --------------------------------------------
+
+module.exports = [];
+if(TYPE !== "shopify") module.exports.push(pugConfig);
+scssConfig();
+module.exports.push(tsConfig);
